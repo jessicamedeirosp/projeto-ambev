@@ -1,20 +1,44 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { RedisService } from 'src/redis/redis.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { User } from '@prisma/client';
+import { HashingService } from '../hashing/hashing.service';
 
 @Injectable()
 export class UsersService {
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly prismaService: PrismaService,
     private readonly redisService: RedisService,
+    private readonly hashingService: HashingService,
   ) { }
 
-  async create(createUserDto: CreateUserDto) {
-    const user = await this.prisma.user.create({
-      data: createUserDto,
+  async create(createUserDto: CreateUserDto): Promise<Omit<User, 'password_hash'>> {
+    const existingUser = await this.prismaService.user.findUnique({
+      where: { email: createUserDto.email },
+    });
+
+    if (existingUser) {
+      throw new BadRequestException('E-mail já está em uso por outro usuário');
+    }
+
+    const passwordHash = await this.hashingService.hash(createUserDto.password);
+
+    const user = await this.prismaService.user.create({
+      data: {
+        name: createUserDto.name,
+        email: createUserDto.email,
+        password_hash: passwordHash
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        password_hash: false,
+        created_at: true,
+        updated_at: true
+      }
     });
 
     await this.redisService.set(`user:${user.id}`, JSON.stringify(user));
@@ -22,7 +46,7 @@ export class UsersService {
     return user;
   }
 
-  async findAll(): Promise<User[]> {
+  async findAll(): Promise<Omit<User, 'password_hash'>[]> {
     const cacheKey = 'all_users';
     const cachedUsers = await this.redisService.get(cacheKey);
 
@@ -30,20 +54,37 @@ export class UsersService {
       return JSON.parse(cachedUsers);
     }
 
-    const users = await this.prisma.user.findMany();
+    const users = await this.prismaService.user.findMany({
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        password_hash: false,
+        created_at: true,
+        updated_at: true
+      }
+    });
     await this.redisService.set(cacheKey, JSON.stringify(users));
 
     return users;
   }
 
-  async findOne(id: string) {
+  async findOne(id: string): Promise<Omit<User, 'password_hash'> | null> {
     const cachedUser = await this.redisService.get(`user:${id}`);
     if (cachedUser) {
       return JSON.parse(cachedUser);
     }
 
-    const user = await this.prisma.user.findUnique({
+    const user = await this.prismaService.user.findUnique({
       where: { id },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        password_hash: false,
+        created_at: true,
+        updated_at: true
+      }
     });
 
     if (user) {
@@ -53,11 +94,59 @@ export class UsersService {
     return user;
   }
 
-  async update(id: string, updateUserDto: UpdateUserDto) {
-    const updatedUser = await this.prisma.user.update({
+  async update(id: string, updateUserDto: UpdateUserDto): Promise<Omit<User, 'password_hash'>> {
+
+    const existingUser = await this.prismaService.user.findUnique({
       where: { id },
-      data: updateUserDto,
     });
+
+    if (!existingUser) {
+      throw new BadRequestException('Usuário não encontrado');
+    }
+
+
+    const newData: Partial<{ name: string; email: string; password_hash: string }> = {};
+
+
+    if (updateUserDto.email) {
+      const userWithEmail = await this.prismaService.user.findUnique({
+        where: {
+          email: updateUserDto.email,
+        },
+      });
+
+      if (userWithEmail && userWithEmail.id !== id) {
+        throw new BadRequestException('E-mail já está em uso por outro usuário');
+      }
+
+      newData.email = updateUserDto.email;
+    }
+
+
+    if (updateUserDto.password) {
+      const passwordHash = await this.hashingService.hash(updateUserDto.password);
+      newData.password_hash = passwordHash;
+    }
+
+
+    if (updateUserDto.name) {
+      newData.name = updateUserDto.name;
+    }
+
+
+    const updatedUser = await this.prismaService.user.update({
+      where: { id },
+      data: newData,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        password_hash: false,
+        created_at: true,
+        updated_at: true
+      }
+    });
+
 
     await this.redisService.set(
       `user:${updatedUser.id}`,
@@ -67,8 +156,19 @@ export class UsersService {
     return updatedUser;
   }
 
-  async remove(id: string) {
-    await this.prisma.user.delete({
+
+  async remove(id: string): Promise<void> {
+    const existingUser = await this.prismaService.user.findUnique({
+      where: {
+        id
+      },
+    });
+
+    if (!existingUser) {
+      throw new BadRequestException('Usuário não encontrado');
+    }
+
+    await this.prismaService.user.delete({
       where: { id },
     });
 
