@@ -43,6 +43,18 @@ export class UsersService {
 
     await this.redisService.set(`user:${user.id}`, JSON.stringify(user));
 
+
+    const cacheKey = 'all_users';
+    const cachedUsers = await this.redisService.get(cacheKey);
+    if (cachedUsers) {
+      let users: User[] | null = await JSON.parse(cachedUsers);
+      users = users || [];
+      const newUsers = [...users, user];
+      await this.redisService.set(cacheKey, JSON.stringify(newUsers));
+    } else {
+      await this.redisService.set(cacheKey, JSON.stringify([user]));
+    }
+
     return user;
   }
 
@@ -137,6 +149,17 @@ export class UsersService {
       JSON.stringify(updatedUser),
     );
 
+    const cacheKey = 'all_users';
+    const cachedUsers = await this.redisService.get(cacheKey);
+    if (cachedUsers) {
+      let users: User[] | null = await JSON.parse(cachedUsers);
+      users = users || [];
+      const newUsers = users.map(user => user.id === updatedUser.id ? updatedUser : user);
+      await this.redisService.set(cacheKey, JSON.stringify(newUsers));
+    } else {
+      await this.redisService.set(cacheKey, JSON.stringify([updatedUser]));
+    }
+
     return updatedUser;
   }
 
@@ -155,6 +178,15 @@ export class UsersService {
     await this.prismaService.user.delete({
       where: { id },
     });
+
+    const cacheKey = 'all_users';
+    const cachedUsers = await this.redisService.get(cacheKey);
+    if (cachedUsers) {
+      let users: User[] | null = await JSON.parse(cachedUsers);
+      users = users || [];
+      const newUsers = users.filter(user => user.id !== existingUser.id);
+      await this.redisService.set(cacheKey, JSON.stringify(newUsers));
+    }
 
     await this.redisService.del(`user:${id}`);
   }
