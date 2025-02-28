@@ -104,39 +104,23 @@ export class UsersService {
       throw new BadRequestException('Usuário não encontrado');
     }
 
+    const userWithEmail = await this.prismaService.user.findUnique({
+      where: {
+        email: updateUserDto.email,
+      },
+    });
 
-    const newData: Partial<{ name: string; email: string; password_hash: string }> = {};
-
-
-    if (updateUserDto.email) {
-      const userWithEmail = await this.prismaService.user.findUnique({
-        where: {
-          email: updateUserDto.email,
-        },
-      });
-
-      if (userWithEmail && userWithEmail.id !== id) {
-        throw new BadRequestException('E-mail já está em uso por outro usuário');
-      }
-
-      newData.email = updateUserDto.email;
+    if (userWithEmail && userWithEmail.id !== id) {
+      throw new BadRequestException('E-mail já está em uso por outro usuário');
     }
-
-
-    if (updateUserDto.password) {
-      const passwordHash = await this.hashingService.hash(updateUserDto.password);
-      newData.password_hash = passwordHash;
-    }
-
-
-    if (updateUserDto.name) {
-      newData.name = updateUserDto.name;
-    }
-
 
     const updatedUser = await this.prismaService.user.update({
       where: { id },
-      data: newData,
+      data: {
+        name: updateUserDto.name,
+        email: updateUserDto.email,
+        password_hash: await this.hashingService.hash(updateUserDto.password)
+      },
       select: {
         id: true,
         name: true,

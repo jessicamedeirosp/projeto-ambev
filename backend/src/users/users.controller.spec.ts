@@ -72,6 +72,8 @@ describe('Users Controller', () => {
     const userId = '1';
     const updateUserDto: UpdateUserDto = {
       name: 'Jessica Novo',
+      email: 'teste@teste.com',
+      password: '123123',
     };
 
     const updatedUser = {

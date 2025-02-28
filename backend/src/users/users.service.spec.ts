@@ -324,7 +324,16 @@ describe('UsersService', () => {
 
     it('should throw BadRequestException if user not found', async () => {
       const userId = 'non-existing-user';
-      const updateUserDto: UpdateUserDto = { name: 'Updated Name' };
+      const updatedUser = {
+        id: userId,
+        name: 'Updated Name',
+        email: 'taken_email@teste.com',
+        password: 'password-example',
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+
+      const updateUserDto: UpdateUserDto = updatedUser
 
       jest.spyOn(prismaService.user, 'findUnique').mockResolvedValueOnce(null);
 
@@ -335,7 +344,15 @@ describe('UsersService', () => {
 
     it('should throw BadRequestException if email is already taken by another user', async () => {
       const userId = 'user-1';
-      const updateUserDto: UpdateUserDto = { email: 'taken_email@teste.com' };
+      const updatedUser = {
+        id: userId,
+        name: 'Updated Name',
+        email: 'taken_email@teste.com',
+        password: 'password-example',
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+      const updateUserDto: UpdateUserDto = updatedUser
 
 
       jest.spyOn(prismaService.user, 'findUnique').mockResolvedValueOnce({
