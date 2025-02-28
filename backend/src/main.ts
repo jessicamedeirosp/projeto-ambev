@@ -8,6 +8,6 @@ ConfigModule.forRoot({
 
 async function bootstrap() {
   const app = await NestFactory.create(UsersModule, { cors: true });
-  await app.listen(process.env.PORT ?? 3000);
+  await app.listen(process.env.PORT ?? 3333);
 }
 bootstrap();
