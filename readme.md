@@ -1,5 +1,5 @@
 # Como Executar o Projeto
-Este projeto utiliza **Docker**, então certifique-se de que ele está instalado em sua máquina antes de prosseguir.
+Este projeto utiliza **Docker** e **Docker Compose**, então certifique-se de que ele está instalado em sua máquina antes de prosseguir.
 
 ## Portas utilizadas
 * Backend: 3333
@@ -21,9 +21,10 @@ npm run start:dev
 ```
 ## Executando o Frontend
 
+**Primeiro abra outro terminal na raiz do projeto**
+
 ```bash
-cd ..
-npm install
 cd frontend
+npm install
 npm run dev
 ```
