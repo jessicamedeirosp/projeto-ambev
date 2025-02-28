@@ -136,6 +136,58 @@ describe('UsersService', () => {
         email: createUserDto.email,
       });
     });
+
+    it('should add a new user to cache when cache exists', async () => {
+      const user = {
+        id: 'some-id',
+        name: 'Jessica',
+        email: 'jessica_teste@teste.com',
+        password: 'example-password'
+      };
+      const cachedUsers = [{ id: 'user-2', name: 'Teste', email: 'teste2@teste.com' }];
+      jest.spyOn(redisService, 'get').mockResolvedValue(JSON.stringify(cachedUsers));
+      jest.spyOn(redisService, 'set').mockResolvedValue(undefined);
+
+      await userService.create(user);
+
+      expect(redisService.set).toHaveBeenCalledWith(`user:${user.id}`, JSON.stringify({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+      }));
+
+      expect(redisService.set).toHaveBeenCalledWith('all_users', JSON.stringify([...cachedUsers, {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+      }]));
+    });
+
+    it('should create a new cache when no cache exists', async () => {
+      const user = {
+        id: 'some-id',
+        name: 'Jessica',
+        email: 'jessica_teste@teste.com',
+        password: 'example-password'
+      };
+
+      jest.spyOn(redisService, 'get').mockResolvedValue(JSON.stringify(null));
+      jest.spyOn(redisService, 'set').mockResolvedValue(undefined);
+
+      await userService.create(user);
+
+      expect(redisService.set).toHaveBeenCalledWith(`user:${user.id}`, JSON.stringify({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+      }));
+
+      expect(redisService.set).toHaveBeenCalledWith('all_users', JSON.stringify([{
+        id: user.id,
+        name: user.name,
+        email: user.email,
+      }]));
+    });
   });
 
   describe('findAll users', () => {
@@ -378,11 +430,135 @@ describe('UsersService', () => {
         .rejects
         .toThrowError(BadRequestException);
     });
+
+    it('should update the cache when it exists', async () => {
+      const updatedUser = {
+        id: 'some-id',
+        name: 'Jessica',
+        email: 'jessica_teste@teste.com',
+        password_hash: 'hashed-password',
+      };
+
+      const createdAt = new Date();
+      const cachedUsers = [
+        { id: 'user-1', name: 'Teste', email: 'teste@teste.com' },
+        { id: 'some-id', name: 'Old Name', email: 'jessica_teste@teste.com' }
+      ];
+
+
+      jest.spyOn(redisService, 'get').mockResolvedValue(JSON.stringify(cachedUsers));
+      jest.spyOn(redisService, 'set').mockResolvedValue(undefined);
+
+      jest.spyOn(prismaService.user, 'findUnique').mockResolvedValueOnce({
+        id: 'some-id',
+        name: 'Old Name',
+        email: 'jessica_teste@teste.com',
+        password_hash: 'old-password-hash',
+        created_at: createdAt,
+        updated_at: createdAt,
+      });
+
+
+      jest.spyOn(prismaService.user, 'update').mockResolvedValueOnce({
+        ...updatedUser,
+        created_at: createdAt,
+        updated_at: createdAt,
+      });
+
+
+      await userService.update(updatedUser.id, {
+        name: updatedUser.name,
+        email: updatedUser.email,
+        password: 'new-password'
+      });
+
+
+      expect(redisService.set).toHaveBeenCalledWith(`user:${updatedUser.id}`, JSON.stringify({
+        id: updatedUser.id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        password_hash: updatedUser.password_hash,
+        created_at: createdAt,
+        updated_at: createdAt,
+      }));
+
+
+      expect(redisService.set).toHaveBeenCalledWith('all_users', JSON.stringify([
+        { id: 'user-1', name: 'Teste', email: 'teste@teste.com' },
+        {
+          id: updatedUser.id,
+          name: updatedUser.name,
+          email: updatedUser.email,
+          password_hash: updatedUser.password_hash,
+          created_at: createdAt,
+          updated_at: createdAt,
+        }
+      ]));
+    });
+
+
+
+    it('should create a new cache if it does not exist', async () => {
+      const createdAt = new Date();
+      const updatedUser = {
+        id: 'some-id',
+        name: 'Jessica',
+        email: 'jessica_teste@teste.com',
+        password_hash: 'hashed-password'
+      };
+
+
+      jest.spyOn(redisService, 'get').mockResolvedValue(null);
+      jest.spyOn(redisService, 'set').mockResolvedValue(undefined);
+
+      jest.spyOn(prismaService.user, 'findUnique').mockResolvedValueOnce({
+        id: 'some-id',
+        name: 'Old Name',
+        email: 'jessica_teste@teste.com',
+        password_hash: 'old-password-hash',
+        created_at: createdAt,
+        updated_at: createdAt,
+      });
+
+
+      jest.spyOn(prismaService.user, 'update').mockResolvedValueOnce({
+        ...updatedUser,
+        created_at: createdAt,
+        updated_at: createdAt,
+      });
+
+
+      await userService.update(updatedUser.id, {
+        name: updatedUser.name,
+        email: updatedUser.email,
+        password: 'new-password'
+      });
+
+
+      expect(redisService.set).toHaveBeenCalledWith(`user:${updatedUser.id}`, JSON.stringify({
+        id: updatedUser.id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        password_hash: updatedUser.password_hash,
+        created_at: createdAt,
+        updated_at: createdAt,
+      }));
+
+
+      expect(redisService.set).toHaveBeenCalledWith('all_users', JSON.stringify([{
+        id: updatedUser.id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        password_hash: updatedUser.password_hash,
+        created_at: createdAt,
+        updated_at: createdAt,
+      }]));
+    });
   });
+
   describe('remove user', () => {
     it('should remove the user from the database and cache', async () => {
       const userId = 'user-1';
-
 
       jest.spyOn(prismaService.user, 'findUnique').mockResolvedValueOnce({
         id: userId,
@@ -393,7 +569,6 @@ describe('UsersService', () => {
         password_hash: 'teste123',
       });
 
-
       jest.spyOn(prismaService.user, 'delete').mockResolvedValueOnce({
         id: userId,
         name: 'Jessica',
@@ -403,17 +578,13 @@ describe('UsersService', () => {
         password_hash: 'teste123',
       });
 
-
       jest.spyOn(redisService, 'del').mockResolvedValueOnce();
 
-
       await userService.remove(userId);
-
 
       expect(prismaService.user.delete).toHaveBeenCalledWith({
         where: { id: userId },
       });
-
 
       expect(redisService.del).toHaveBeenCalledWith(`user:${userId}`);
     });
@@ -421,20 +592,81 @@ describe('UsersService', () => {
     it('should throw BadRequestException if user is not found', async () => {
       const userId = 'non-existent-user';
 
-
       jest.spyOn(prismaService.user, 'findUnique').mockResolvedValueOnce(null);
-
 
       await expect(userService.remove(userId))
         .rejects
         .toThrowError(BadRequestException);
-
 
       expect(prismaService.user.delete).not.toHaveBeenCalled();
 
 
       expect(redisService.del).not.toHaveBeenCalled();
     });
+
+    it('should remove a user and update cache when user exists', async () => {
+      const userId = 'user-1';
+      const existingUser = {
+        id: 'user-1',
+        name: 'Jessica',
+        email: 'jessica_teste@teste.com',
+        password_hash: 'hashed-password',
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+
+      const cachedUsers = [
+        { id: 'user-1', name: 'Jessica', email: 'jessica_teste@teste.com' },
+        { id: 'user-2', name: 'Carlos', email: 'carlos_teste@teste.com' },
+      ];
+
+      jest.spyOn(prismaService.user, 'findUnique').mockResolvedValueOnce(existingUser);
+      jest.spyOn(prismaService.user, 'delete').mockResolvedValueOnce(existingUser);
+      jest.spyOn(redisService, 'get').mockResolvedValueOnce(JSON.stringify(cachedUsers));
+      jest.spyOn(redisService, 'set').mockResolvedValue();
+      jest.spyOn(redisService, 'del').mockResolvedValue();
+
+      await userService.remove(userId);
+
+      expect(prismaService.user.delete).toHaveBeenCalledWith({
+        where: { id: userId },
+      });
+
+      const updatedUsers = cachedUsers.filter(user => user.id !== userId);
+      expect(redisService.set).toHaveBeenCalledWith('all_users', JSON.stringify(updatedUsers));
+      expect(redisService.del).toHaveBeenCalledWith(`user:${userId}`);
+    });
+
+    it('should throw BadRequestException if user is not found', async () => {
+      const userId = 'non-existing-user';
+
+      jest.spyOn(prismaService.user, 'findUnique').mockResolvedValueOnce(null);
+
+      await expect(userService.remove(userId)).rejects.toThrowError(BadRequestException);
+    });
+
+    it('should not update cache if no users are in cache', async () => {
+      const userId = 'user-1';
+      const existingUser = {
+        id: 'user-1',
+        name: 'Jessica',
+        email: 'jessica_teste@teste.com',
+        password_hash: 'hashed-password',
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+
+      jest.spyOn(prismaService.user, 'findUnique').mockResolvedValueOnce(existingUser);
+      jest.spyOn(prismaService.user, 'delete').mockResolvedValueOnce(existingUser);
+      jest.spyOn(redisService, 'get').mockResolvedValueOnce(null);
+      jest.spyOn(redisService, 'del').mockResolvedValue();
+
+      await userService.remove(userId);
+
+      expect(redisService.set).not.toHaveBeenCalled();
+      expect(redisService.del).toHaveBeenCalledWith(`user:${userId}`);
+    });
+
   });
 
 
