@@ -7,7 +7,7 @@ ConfigModule.forRoot({
 });
 
 async function bootstrap() {
-  const app = await NestFactory.create(UsersModule);
+  const app = await NestFactory.create(UsersModule, { cors: true });
   await app.listen(process.env.PORT ?? 3000);
 }
 bootstrap();
